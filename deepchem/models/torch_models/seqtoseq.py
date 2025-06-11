@@ -399,8 +399,8 @@ class SeqToSeqModel(TorchModel):
 
     #     return loss_fn
     
-    
-    def _create_loss(self):
+
+    def _create_loss(self): #TODO: New, but stillnot similar to Tensorflow reproduction of SMILES
         """Fixed loss function for PyTorch SeqToSeq model."""
         if self._variational:
             base_loss = sum(self.model.randomizer.loss_list)
@@ -430,7 +430,7 @@ class SeqToSeqModel(TorchModel):
                 target_masked = target_reshaped[mask]
                 
                 # Check if output is probabilities or logits
-                if torch.all(output >= 0) and torch.allclose(output.sum(dim=-1), torch.ones(output.size(0))):
+                if torch.all(output >= 0) and torch.allclose(output.sum(dim=-1), torch.ones_like(output.sum(dim=-1))):
                     # Outputs are probabilities, use NLLLoss with log
                     log_probs = torch.log(output_masked + 1e-8)
                     loss = nn.NLLLoss()(log_probs, target_masked.long())
