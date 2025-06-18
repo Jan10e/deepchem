@@ -5326,6 +5326,142 @@ class DecoderRNN(nn.Module):
         return output, hidden
 
 
+
+class DecoderRNNParallel(nn.Module):
+    """Decoder Layer for SeqToSeq Model.
+
+    The decoder transforms the embedding vector into the output sequence.
+    It is trained to predict the next token in the sequence given the previous
+    tokens in the sequence. It uses the context vector from the encoder to
+    help generate the correct token in the sequence.
+
+    Examples
+    --------
+    >>> from deepchem.models.torch_models.layers import DecoderRNNParallel
+    >>> import torch
+    >>> embedding_dimensions = 512
+    >>> num_output_tokens = 7
+    >>> max_length = 10
+    >>> batch_size = 100
+    >>> n_layers = 2
+    >>> layer = DecoderRNN(embedding_dimensions, num_output_tokens, n_layers, max_length, batch_size)
+    >>> embeddings = torch.randn(batch_size, embedding_dimensions)
+    >>> output, hidden = layer([embeddings, None])
+    >>> output.shape
+    torch.Size([100, 10, 7])
+
+    References
+    ----------
+    .. [1] Sutskever et al., "Sequence to Sequence Learning with Neural Networks"
+
+    """
+
+    def __init__(self,
+                 hidden_size: int,
+                 output_size: int,
+                 n_layers: int,
+                 max_length: int,
+                 batch_size: int,
+                 step_activation: str = "relu",
+                 **kwargs):
+        """Initialize the DecoderRNN layer.
+
+        Parameters
+        ----------
+        hidden_size: int
+            Number of features in the hidden state.
+        output_size: int
+            Number of expected features.
+        max_length: int
+            Maximum length of the sequence.
+        batch_size: int
+            Batch size of the input.
+        step_activation: str (default "relu")
+            Activation function to use after every step.
+
+        """
+        super(DecoderRNNParallel, self).__init__(**kwargs)
+        self.n_layers = n_layers
+        self.embedding = nn.Embedding(output_size, hidden_size)
+        self.gru = nn.GRU(hidden_size, hidden_size, n_layers, batch_first=True)
+        self.out = nn.Linear(hidden_size, output_size)
+        self.act = get_activation("softmax")
+        self.step_act = get_activation(step_activation)
+        self.MAX_LENGTH = max_length
+        self.batch_size = batch_size
+
+    def __repr__(self) -> str:
+        """Returns a string representing the configuration of the layer.
+
+        Returns
+        -------
+        hidden_size: int
+            Number of features in the hidden state.
+        output_size: int
+            Number of expected features.
+        max_length: int
+            Maximum length of the sequence.
+        batch_size: int
+            Batch size of the input.
+        step_activation: str (default "relu")
+            Activation function to use after every step.
+
+        """
+        return f'{self.__class__.__name__}(hidden_size={self.hidden_size}, output_size={self.output_size}, max_length={self.max_length}, batch_size={self.batch_size})'
+
+    def forward(self, inputs: List[torch.Tensor]):
+        """
+        Parameters
+        ----------
+        inputs: List[torch.Tensor]
+            A list of tensor containg encoder_hidden and target_tensor.
+
+        Returns
+        -------
+        decoder_outputs: torch.Tensor
+            Predicted output sequences.
+        decoder_hidden: torch.Tensor
+            Hidden state of the decoder.
+
+        """
+        encoder_hidden, target_tensor = inputs
+        
+        # decoder_input of size [batch_size, 1]
+        decoder_input = torch.ones(self.batch_size,
+                                   1,
+                                   dtype=torch.long,
+                                   device=encoder_hidden.device)
+        
+        # Embed this single token input: shape -> [batch_size, 1, hidden_size]
+        embedded_input = self.embedding(decoder_input)
+        embedded_input = self.step_act(embedded_input)
+
+        # Repeat this embedding across all time steps: [batch_size, max_length, hidden_size]
+        repeated_input = embedded_input.repeat(1, self.MAX_LENGTH, 1)
+
+        # Expand encoder hidden to fit GRU requirements: [n_layers, batch_size, hidden_size]
+        decoder_hidden = torch.stack([encoder_hidden] * self.n_layers, dim=0)
+
+        # Run the GRU over the entire repeated input in one go (parallel)
+        decoder_output, decoder_hidden = self.gru(repeated_input, decoder_hidden)
+
+        # Project output to token logits: [batch_size, max_length, output_size]
+        decoder_output = self.out(decoder_output)
+
+        # Apply final activation(e.g. softmax) 
+        # TODO: check whether this is wanted here, or that the Seq2Seq model handles this
+        decoder_output = self.act(decoder_output, dim=-1)
+
+        return decoder_output, decoder_hidden
+
+    def step(self, input, hidden):
+        output = self.embedding(input)
+        output = self.step_act(output)
+        output, hidden = self.gru(output, hidden)
+        output = self.out(output)
+        return output, hidden
+
+
 class FerminetElectronFeature(torch.nn.Module):
     """
     A Pytorch Module implementing the ferminet's electron features interaction layer _[1]. This is a helper class for the Ferminet model.
