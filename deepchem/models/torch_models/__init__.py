@@ -18,7 +18,7 @@ from deepchem.models.torch_models.pagtn import Pagtn, PagtnModel
 from deepchem.models.torch_models.mat import MAT, MATModel
 from deepchem.models.torch_models.megnet import MEGNetModel
 from deepchem.models.torch_models.normalizing_flows_pytorch import NormalizingFlow
-from deepchem.models.torch_models.layers import MultilayerPerceptron, CNNModule, CombineMeanStd, WeightedLinearCombo, AtomicConvolution, NeighborList, SetGather, EdgeNetwork, WeaveLayer, WeaveGather, MolGANConvolutionLayer, MolGANAggregationLayer, MolGANMultiConvolutionLayer, MolGANEncoderLayer, VariationalRandomizer, EncoderRNN, DecoderRNN, DecoderRNNParallel, AtomicConv, GraphConv, GraphPool, GraphGather, DAGGather, DAGLayer
+from deepchem.models.torch_models.layers import MultilayerPerceptron, CNNModule, CombineMeanStd, WeightedLinearCombo, AtomicConvolution, NeighborList, SetGather, EdgeNetwork, WeaveLayer, WeaveGather, MolGANConvolutionLayer, MolGANAggregationLayer, MolGANMultiConvolutionLayer, MolGANEncoderLayer, VariationalRandomizer, EncoderRNN, DecoderRNN, AtomicConv, GraphConv, GraphPool, GraphGather, DAGGather, DAGLayer
 from deepchem.models.torch_models.cnn import CNN
 from deepchem.models.torch_models.scscore import ScScore, ScScoreModel
 from deepchem.models.torch_models.weavemodel_pytorch import Weave, WeaveModel
@@ -26,7 +26,7 @@ from deepchem.models.torch_models.attention import ScaledDotProductAttention, Se
 from deepchem.models.torch_models.grover import GroverModel, GroverPretrain, GroverFinetune
 from deepchem.models.torch_models.readout import GroverReadout
 from deepchem.models.torch_models.dtnn import DTNN, DTNNModel
-from deepchem.models.torch_models.seqtoseq import SeqToSeq, SeqToSeqModel, SeqToSeqParallel, SeqToSeqModelParallel
+from deepchem.models.torch_models.seqtoseq import SeqToSeq, SeqToSeqModel
 from deepchem.models.torch_models.acnn import AtomConvModel
 from deepchem.models.torch_models.progressive_multitask import ProgressiveMultitask, ProgressiveMultitaskModel, ProgressiveMultitaskClassifier, ProgressiveMultitaskRegressor
 from deepchem.models.torch_models.text_cnn import TextCNNModel
