@@ -309,3 +309,72 @@ def create_output_array(sequences: Collection, max_output_length: int,
         for j in range(lengths[i], max_output_length):
             labels[i, j] = output_dict[end_mark]
     return labels
+
+
+def create_soft_output_array(sequences: Collection,
+                              max_output_length: int,
+                              batch_size: int,
+                              output_dict: Dict,
+                              end_mark: Any,
+                              smoothing: float = 0.0) -> np.ndarray:
+    """
+    Create a 3D array representing soft target sequences using label smoothing.
+
+    This function is used in sequence-to-sequence models to convert output
+    token sequences into probability distributions (soft targets) instead of
+    one-hot vectors. It applies label smoothing to reduce model overconfidence
+    and improve generalization.
+
+    Parameters
+    ----------
+    sequences: Collection
+        List of output token sequences.
+    max_output_length: int
+        Maximum allowed output sequence length.
+    batch_size: int
+        Number of sequences in the batch.
+    output_dict: Dict
+        Mapping from output tokens to integer indices.
+    end_mark: Any
+        Token indicating the end of a sequence.
+    smoothing: float, optional (default=0.1)
+        Amount of label smoothing to apply. When `smoothing=0.0`, this function
+        behaves like a hard one-hot encoder. For values between 0.0 and 1.0,
+        the correct class receives a probability of `1.0 - smoothing`, and the
+        remaining probability mass is evenly distributed across the other classes.
+
+        Example (vocab_size = 5, smoothing = 0.1):
+            [0.02, 0.02, 0.92, 0.02, 0.02]  # for correct class index 2
+
+        Notes:
+        - smoothing must be in the range [0.0, 1.0).
+        - Higher smoothing values make target distributions more uniform.
+        - smoothing = 1.0 results in a uniform distribution (not recommended).
+
+    Returns
+    -------
+    labels: np.ndarray of shape (batch_size, max_output_length, vocab_size)
+        Array of smoothed probability distributions corresponding to output tokens.
+    """
+    vocab_size = len(output_dict)
+    labels = np.zeros((batch_size, max_output_length, vocab_size), dtype=np.float32)
+
+    for i, sequence in enumerate(sequences):
+        for j, token in enumerate(sequence):
+            idx = output_dict[token]
+            if smoothing > 0:
+                labels[i, j] = smoothing / vocab_size
+                labels[i, j, idx] += 1.0 - smoothing
+            else:
+                labels[i, j, idx] = 1.0
+        for j in range(len(sequence), max_output_length):
+            idx = output_dict[end_mark]
+            if smoothing > 0:
+                labels[i, j] = smoothing / vocab_size
+                labels[i, j, idx] += 1.0 - smoothing
+            else:
+                labels[i, j, idx] = 1.0
+    return labels
+
+
+

@@ -16,7 +16,7 @@ from deepchem.utils.misc_utils import Uniquifier
 from deepchem.utils.misc_utils import memoize_method
 from deepchem.utils.misc_utils import get_option
 
-from deepchem.utils.batch_utils import batch_coulomb_matrix_features
+from deepchem.utils.batch_utils import batch_coulomb_matrix_features, create_soft_output_array
 
 from deepchem.utils.attribute_utils import set_attr
 from deepchem.utils.attribute_utils import get_attr

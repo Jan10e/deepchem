@@ -8,7 +8,7 @@ import torch
 
 from deepchem.models.torch_models.layers import EncoderRNN, DecoderRNN, VariationalRandomizer
 from deepchem.models.torch_models import TorchModel
-from deepchem.utils.batch_utils import batch_elements, create_input_array, create_output_array
+from deepchem.utils.batch_utils import batch_elements, create_input_array, create_output_array, create_soft_output_array
 
 
 class SeqToSeq(nn.Module):
@@ -309,6 +309,8 @@ class SeqToSeqModel(TorchModel):
                  variational: bool = False,
                  annealing_start_step: int = 5000,
                  annealing_final_step: int = 10000,
+                 use_soft_targets: bool = False,
+                 smoothing: float = 0.1,
                  **kwargs):
         """Construct a SeqToSeq model.
 
@@ -364,6 +366,9 @@ class SeqToSeqModel(TorchModel):
         self._annealing_start_step = annealing_start_step
         self._annealing_final_step = annealing_final_step
 
+        self.use_soft_targets = use_soft_targets
+        self.smoothing = smoothing
+
         self.model: nn.Module = SeqToSeq(
             n_input_tokens=self._n_input_tokens,
             n_output_tokens=self._n_output_tokens,
@@ -377,9 +382,16 @@ class SeqToSeqModel(TorchModel):
             annealing_start_step=self._annealing_start_step,
             annealing_final_step=self._annealing_final_step)
 
+        # super(SeqToSeqModel,
+        #       self).__init__(self.model,
+        #                      self._create_loss(),
+        #                      output_types=['prediction', 'embedding'],
+        #                      batch_size=self.batch_size,
+        #                      **kwargs)
+        
         super(SeqToSeqModel,
               self).__init__(self.model,
-                             self._create_loss(),
+                             self._create_loss_soft() if use_soft_targets else self._create_loss(),
                              output_types=['prediction', 'embedding'],
                              batch_size=self.batch_size,
                              **kwargs)
@@ -400,49 +412,29 @@ class SeqToSeqModel(TorchModel):
 
         return loss_fn
     
-    # def _create_loss(self): #TODO: New, but stillnot similar to Tensorflow reproduction of SMILES
-    #     """Fixed loss function for PyTorch SeqToSeq model."""
-    #     if self._variational:
-    #         base_loss = sum(self.model.randomizer.loss_list)
-    #     else:
-    #         base_loss = torch.tensor(0.0)
+    
+    def _create_loss_soft(self):
+        """Create loss function for soft targets using KL divergence."""
+        if self._variational:
+            loss = sum(self.model.randomizer.loss_list)
+        else:
+            loss = torch.tensor(0.0)
 
-    #     def loss_fn(outputs, labels, weights):
-    #         output = outputs[0]  # [batch_size, seq_len, vocab_size]
-    #         target = labels[0]   # Could be one-hot or indices
-            
-    #         # Handle different target formats
-    #         if target.dim() == 3:  # One-hot encoded [batch, seq, vocab]
-    #             target_indices = torch.argmax(target, dim=-1)  # Convert to indices
-    #         else:  # Already indices [batch, seq]
-    #             target_indices = target
-                
-    #         # Reshape for loss computation
-    #         output_reshaped = output.view(-1, output.size(-1))
-    #         target_reshaped = target_indices.view(-1)
-            
-    #         # Create mask to ignore padding tokens (assuming 0 is padding)
-    #         mask = target_reshaped != 0
-            
-    #         # Apply mask
-    #         if mask.any():
-    #             output_masked = output_reshaped[mask]
-    #             target_masked = target_reshaped[mask]
-                
-    #             # Check if output is probabilities or logits
-    #             if torch.all(output >= 0) and torch.allclose(output.sum(dim=-1), torch.ones_like(output.sum(dim=-1))):
-    #                 # Outputs are probabilities, use NLLLoss with log
-    #                 log_probs = torch.log(output_masked + 1e-8)
-    #                 loss = nn.NLLLoss()(log_probs, target_masked.long())
-    #             else:
-    #                 # Outputs are logits, use CrossEntropyLoss
-    #                 loss = nn.CrossEntropyLoss()(output_masked, target_masked.long())
-    #         else:
-    #             loss = torch.tensor(0.0, requires_grad=True)
-                
-    #         return base_loss + loss
+        def loss_fn(outputs, labels, weights):
+            pred = outputs[0]  # shape: [batch*seq_len, vocab_size]
+            target = labels[0]  # shape: [batch, seq_len, vocab_size]
 
-    #     return loss_fn
+            pred = pred.view(-1, pred.size(-1))  # flatten
+            target = target.view(-1, target.size(-1))  # flatten
+
+            loss_ = nn.KLDivLoss(reduction='batchmean')(
+                torch.log(pred.to(torch.float32) + 1e-8),  # avoid log(0)
+                target.to(torch.float32)
+            )
+            return loss + loss_
+
+        return loss_fn
+
         
 
     def fit_sequences(self,
@@ -643,8 +635,23 @@ class SeqToSeqModel(TorchModel):
                                           self._reverse_input, self.batch_size,
                                           self._input_dict,
                                           SeqToSeqModel.sequence_end)
-            labels = create_output_array(outputs, self._max_output_length,
-                                         self.batch_size, self._output_dict,
-                                         SeqToSeqModel.sequence_end)
+            # labels = create_output_array(outputs, self._max_output_length,
+            #                              self.batch_size, self._output_dict,
+            #                              SeqToSeqModel.sequence_end)
+
+            if self.use_soft_targets:
+                labels = create_soft_output_array(outputs, 
+                                                  self._max_output_length,
+                                                  self.batch_size,
+                                                  self._output_dict,
+                                                  SeqToSeqModel.sequence_end,
+                                                  smoothing=self.smoothing)
+            else:
+                labels = create_output_array(outputs, 
+                                             self._max_output_length,
+                                             self.batch_size, 
+                                             self._output_dict,
+                                             SeqToSeqModel.sequence_end)
+
             yield ([features, np.array(self.get_global_step())], [labels], [])
 
