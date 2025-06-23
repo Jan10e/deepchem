@@ -384,65 +384,65 @@ class SeqToSeqModel(TorchModel):
                              batch_size=self.batch_size,
                              **kwargs)
 
-    # def _create_loss(self):
-    #     """Create loss function for model."""
-    #     if self._variational:
-    #         loss = sum(self.model.randomizer.loss_list)
-    #     else:
-    #         loss = torch.tensor(0.0)
-
-    #     def loss_fn(outputs, labels, weights):
-    #         output = outputs[0].view(-1, outputs[0].size(-1))
-    #         target = labels[0].view(-1)
-    #         loss_ = nn.NLLLoss()(torch.log(output.to(torch.float32)),
-    #                              target.to(torch.int64))
-    #         return loss + loss_
-
-    #     return loss_fn
-    
-    def _create_loss(self): #TODO: New, but stillnot similar to Tensorflow reproduction of SMILES
-        """Fixed loss function for PyTorch SeqToSeq model."""
+    def _create_loss(self):
+        """Create loss function for model."""
         if self._variational:
-            base_loss = sum(self.model.randomizer.loss_list)
+            loss = sum(self.model.randomizer.loss_list)
         else:
-            base_loss = torch.tensor(0.0)
+            loss = torch.tensor(0.0)
 
         def loss_fn(outputs, labels, weights):
-            output = outputs[0]  # [batch_size, seq_len, vocab_size]
-            target = labels[0]   # Could be one-hot or indices
-            
-            # Handle different target formats
-            if target.dim() == 3:  # One-hot encoded [batch, seq, vocab]
-                target_indices = torch.argmax(target, dim=-1)  # Convert to indices
-            else:  # Already indices [batch, seq]
-                target_indices = target
-                
-            # Reshape for loss computation
-            output_reshaped = output.view(-1, output.size(-1))
-            target_reshaped = target_indices.view(-1)
-            
-            # Create mask to ignore padding tokens (assuming 0 is padding)
-            mask = target_reshaped != 0
-            
-            # Apply mask
-            if mask.any():
-                output_masked = output_reshaped[mask]
-                target_masked = target_reshaped[mask]
-                
-                # Check if output is probabilities or logits
-                if torch.all(output >= 0) and torch.allclose(output.sum(dim=-1), torch.ones_like(output.sum(dim=-1))):
-                    # Outputs are probabilities, use NLLLoss with log
-                    log_probs = torch.log(output_masked + 1e-8)
-                    loss = nn.NLLLoss()(log_probs, target_masked.long())
-                else:
-                    # Outputs are logits, use CrossEntropyLoss
-                    loss = nn.CrossEntropyLoss()(output_masked, target_masked.long())
-            else:
-                loss = torch.tensor(0.0, requires_grad=True)
-                
-            return base_loss + loss
+            output = outputs[0].view(-1, outputs[0].size(-1))
+            target = labels[0].view(-1)
+            loss_ = nn.NLLLoss()(torch.log(output.to(torch.float32)),
+                                 target.to(torch.int64))
+            return loss + loss_
 
         return loss_fn
+    
+    # def _create_loss(self): #TODO: New, but stillnot similar to Tensorflow reproduction of SMILES
+    #     """Fixed loss function for PyTorch SeqToSeq model."""
+    #     if self._variational:
+    #         base_loss = sum(self.model.randomizer.loss_list)
+    #     else:
+    #         base_loss = torch.tensor(0.0)
+
+    #     def loss_fn(outputs, labels, weights):
+    #         output = outputs[0]  # [batch_size, seq_len, vocab_size]
+    #         target = labels[0]   # Could be one-hot or indices
+            
+    #         # Handle different target formats
+    #         if target.dim() == 3:  # One-hot encoded [batch, seq, vocab]
+    #             target_indices = torch.argmax(target, dim=-1)  # Convert to indices
+    #         else:  # Already indices [batch, seq]
+    #             target_indices = target
+                
+    #         # Reshape for loss computation
+    #         output_reshaped = output.view(-1, output.size(-1))
+    #         target_reshaped = target_indices.view(-1)
+            
+    #         # Create mask to ignore padding tokens (assuming 0 is padding)
+    #         mask = target_reshaped != 0
+            
+    #         # Apply mask
+    #         if mask.any():
+    #             output_masked = output_reshaped[mask]
+    #             target_masked = target_reshaped[mask]
+                
+    #             # Check if output is probabilities or logits
+    #             if torch.all(output >= 0) and torch.allclose(output.sum(dim=-1), torch.ones_like(output.sum(dim=-1))):
+    #                 # Outputs are probabilities, use NLLLoss with log
+    #                 log_probs = torch.log(output_masked + 1e-8)
+    #                 loss = nn.NLLLoss()(log_probs, target_masked.long())
+    #             else:
+    #                 # Outputs are logits, use CrossEntropyLoss
+    #                 loss = nn.CrossEntropyLoss()(output_masked, target_masked.long())
+    #         else:
+    #             loss = torch.tensor(0.0, requires_grad=True)
+                
+    #         return base_loss + loss
+
+    #     return loss_fn
         
 
     def fit_sequences(self,
